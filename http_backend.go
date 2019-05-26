@@ -127,7 +127,7 @@ func (h *httpBackend) GetMatchingRule(domain string) *LimitRule {
 	return nil
 }
 
-func (h *httpBackend) Cache(request *http.Request, bodySize int, cacheDir string) (*Response, error) {
+func (h *httpBackend) Cache(request *http.Request, bodySize int, cacheDir string, cacheFilter func(request *http.Request, response *Response) (bool, error)) (*Response, error) {
 	if cacheDir == "" || request.Method != "GET" {
 		return h.Do(request, bodySize)
 	}
@@ -139,8 +139,15 @@ func (h *httpBackend) Cache(request *http.Request, bodySize int, cacheDir string
 		resp := new(Response)
 		err := gob.NewDecoder(file).Decode(resp)
 		file.Close()
-		if resp.StatusCode < 500 {
-			return resp, err
+		if cacheFilter != nil {
+			isFilter := false
+			if isFilter, err = cacheFilter(request, resp); isFilter {
+				return resp, err
+			}
+		} else {
+			if resp.StatusCode < 500 {
+				return resp, err
+			}
 		}
 	}
 	resp, err := h.Do(request, bodySize)
